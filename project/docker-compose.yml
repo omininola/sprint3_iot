@@ -1,0 +1,114 @@
+name: mottu
+
+services:
+  server:
+    container_name: server
+    build:
+      context: ./server
+    depends_on:
+      db_mongo:
+        condition: service_healthy
+      db_mysql:
+        condition: service_healthy
+    restart: on-failure:5
+    environment:
+      MYSQL_HOST: db_mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: mottu
+      MYSQL_USER: mottu
+      MYSQL_PASS: mottu
+      MONGO_HOST: db_mongo
+      MONGO_PORT: 27017
+      MONGO_DATABASE: mottu
+      MONGO_USER: mottu
+      MONGO_PASS: mottu
+    ports:
+      - "8080:8080"
+    networks:
+      - frontend
+      - backend
+
+  tag_detection:
+    container_name: tag_detection
+    build:
+      context: ./tag_detection
+    depends_on:
+      - server
+    restart: on-failure:5
+    environment:
+      VIDEO_CAPTURE_ID: 2
+      JAVA_HOST: server
+      JAVA_PORT: 8080
+      YARD_ID: 1
+      UPDATE_TAG_INTERVAL: 2
+    privileged: true
+    ports:
+      - "5000:5000"
+    networks:
+      - backend
+    devices:
+      - /dev:/dev
+
+  client:
+    container_name: client
+    build:
+      context: ./client
+      args:
+        NEXT_PUBLIC_JAVA_URL: http://localhost:8080
+    depends_on:
+      - server
+    restart: on-failure
+    ports:
+      - "3000:3000"
+    networks:
+      - frontend
+
+  db_mongo:
+    container_name: db_mongo
+    image: mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: mottu
+      MONGO_INITDB_ROOT_PASSWORD: mottu
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    ports:
+      - "27017:27017"
+    volumes:
+      - db_mongo:/data/db
+    networks:
+      - backend
+
+  db_mysql:
+    container_name: db_mysql
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: mottu
+      MYSQL_DATABASE: mottu
+      MYSQL_USER: mottu
+      MYSQL_PASSWORD: mottu
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p mottu"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s 
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_mysql:/var/lib/mysql
+    networks:
+      - backend
+
+volumes:
+  db_mysql:
+  db_mongo:
+
+networks:
+  frontend:
+  backend:
